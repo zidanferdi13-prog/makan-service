@@ -1,0 +1,27 @@
+2025-12-01 11:55:59 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild)
+2025-12-01 11:56:00 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild)
+2025-12-01 11:56:00 +07:00: Server running at http://0.0.0.0:3000
+2025-12-01 14:17:27 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' })
+2025-12-01 14:17:28 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit)
+2025-12-01 14:17:28 +07:00: Server running at http://0.0.0.0:3000
+2025-12-02 08:01:45 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild)
+2025-12-02 08:01:46 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`)
+2025-12-02 08:01:47 +07:00: Server running at http://0.0.0.0:3000
+2025-12-02 08:13:11 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 encrypt with dotenvx: https://dotenvx.com)
+2025-12-02 08:13:12 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  write to custom object with { processEnv: myObject })
+2025-12-02 08:13:12 +07:00: Server running at http://0.0.0.0:3000
+2025-12-02 08:14:13 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  override existing env vars with { override: true })
+2025-12-02 08:14:14 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 encrypt with dotenvx: https://dotenvx.com)
+2025-12-02 08:14:14 +07:00: Server running at http://0.0.0.0:3000
+2025-12-02 08:19:22 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit)
+2025-12-02 08:19:23 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild)
+2025-12-02 08:19:23 +07:00: Server running at http://0.0.0.0:3000
+2025-12-02 08:53:37 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`)
+2025-12-02 08:53:38 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit)
+2025-12-02 08:53:38 +07:00: Server running at http://0.0.0.0:3000
+2025-12-02 09:22:29 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 encrypt with dotenvx: https://dotenvx.com)
+2025-12-02 09:22:30 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' })
+2025-12-02 09:22:30 +07:00: Server running at http://0.0.0.0:3000
+2025-12-02 10:52:33 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  override existing env vars with { override: true })
+2025-12-02 10:52:34 +07:00: [dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit)
+2025-12-02 10:52:34 +07:00: Server running at http://0.0.0.0:3000

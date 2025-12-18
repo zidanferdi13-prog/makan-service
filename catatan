@@ -1,5 +1,0 @@
-1. hapus file .git (hidden file)
-2. ketik "git init"
-3. ketik "git remote add . https://GIT_REPO_BARU_LU"
-4. tambahkan ".env" pada gitIgnore
-5. lakukan push pada repo baru lu
