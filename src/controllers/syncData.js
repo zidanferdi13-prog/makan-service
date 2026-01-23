@@ -13,6 +13,7 @@ const sinkronData = async () => {
       let updated = 0;
       let inserted = 0;
       let errors = 0;
+      let deleted = 0;
 
       for (const karyawan of data) {
         try {
@@ -151,22 +152,35 @@ const sinkronData = async () => {
         }
       }
 
+      const apiIds = data.map(k => k.m_karyawan_id);
+      const [localRows] = await connection.query('SELECT m_karyawan_id FROM m_karyawan');
+      const localIds = localRows.map(row => row.m_karyawan_id);
+      const idsToDelete = localIds.filter(id => !apiIds.includes(id));
+      if (idsToDelete.length > 0) {
+        await connection.query(
+          `DELETE FROM m_karyawan WHERE m_karyawan_id IN (${idsToDelete.map(() => '?').join(',')})`,
+          idsToDelete
+        );
+        deleted = idsToDelete.length;
+      }
+
       const result = {
         total,
         inserted,
         updated,
+        deleted,
         errors
       };
 
       console.log(
         `[${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}] Sinkronisasi selesai - ` +
-        `Total: ${total}, Inserted: ${inserted}, Updated: ${updated}, Errors: ${errors}`
+        `Total: ${total}, Inserted: ${inserted}, Updated: ${updated}, Deleted: ${deleted}, Errors: ${errors}`
       );
 
       return result;
     } else {
       console.log(`[${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}] Tidak ada data untuk disinkronkan`);
-      return { total: 0, inserted: 0, updated: 0, errors: 0 };
+      return { total: 0, inserted: 0, updated: 0, errors: 0, deleted: 0 };
     }
   } catch (error) {
     console.error(`[${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}] Error sinkronisasi data:`, error.message);

@@ -5,7 +5,7 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const { makan, findMakan } = require("./src/controllers/makanController");
 const { sinkronData } = require("./src/controllers/syncData");
-const { startSync, sinkronCloud } = require("./src/controllers/syncCloud");
+const { startSync, getDataDevice, getDataCloud } = require("./src/controllers/syncCloud");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -39,6 +39,7 @@ app.post("/sync", async (req, res) => {
       total: result.total,
       inserted: result.inserted,
       updated: result.updated,
+      deleted: result.deleted,
       errors: result.errors
     });
   } catch (error) {
@@ -48,9 +49,23 @@ app.post("/sync", async (req, res) => {
 });
 
 // Route untuk sync cloud (push data ke cloud)
-app.post("/sinkronCloud", async (req, res) => {
+app.post("/getDataDevice", async (req, res) => {
   try {
-    const result = await sinkronCloud();
+    const result = await getDataDevice();
+    res.json({
+      success: result.success,
+      message: result.message,
+      total: result.total
+    });
+  } catch (error) {
+    console.error("Error sync cloud:", error);
+    res.status(500).json({ success: false, message: "Gagal sinkronisasi cloud: " + error.message });
+  }
+});
+
+app.post("/getDataCloud", async (req, res) => {
+  try {
+    const result = await getDataCloud();
     res.json({
       success: result.success,
       message: result.message,

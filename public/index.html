@@ -5,91 +5,134 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pendataan Makan Karyawan</title>
     <style>
+            .main-card.red {
+              background: #e53935 !important;
+              box-shadow: 0 4px 16px rgba(229,57,53,0.25);
+              color: #fff !important;
+              border: 2px solid #b71c1c;
+              transition: background 0.3s, color 0.3s;
+            }
+            .main-card.red .nama,
+            .main-card.red .message,
+            .main-card.red .status-badge {
+              color: #fff !important;
+            }
+            .main-card.red .status-badge {
+              background: #b71c1c !important;
+              box-shadow: 0 2px 8px rgba(183,28,28,0.18);
+            }
       body {
+        background: #f7f7f7;
+        min-height: 100vh;
+        margin: 0;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        height: 100vh;
-        text-align: center;
-        font-family: Arial, sans-serif;
+        font-family: 'Roboto', Arial, sans-serif;
         transition: background-color 0.3s ease;
       }
-      h1,
-      h2,
-      h3 {
-        margin: 5px;
+      .main-card {
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        padding: 28px 18px;
+        width: 95vw;
+        max-width: 340px;
+        text-align: center;
+        margin-top: 10px;
       }
-      #rfidInput {
-        opacity: 0;
-        position: absolute;
+      .nama {
+        font-size: 2.1em;
+        font-weight: bold;
+        margin-bottom: 8px;
+        letter-spacing: 1px;
+      }
+      .status-badge {
+        display: inline-block;
+        padding: 8px 18px;
+        border-radius: 20px;
+        font-size: 1.3em;
+        font-weight: bold;
+        margin: 10px 0;
+        color: #fff;
+        background: #4CAF50;
+        box-shadow: 0 2px 8px rgba(76,175,80,0.15);
+        transition: background 0.3s;
+      }
+      .status-badge.red {
+        background: #e53935;
+        box-shadow: 0 2px 8px rgba(229,57,53,0.15);
+      }
+      .message {
+        font-size: 1.1em;
+        color: #333;
+        margin-bottom: 8px;
+        min-height: 24px;
+        transition: color 0.3s;
       }
       #syncButton {
         position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 12px 24px;
-        background-color: #4CAF50;
+        bottom: 18px;
+        right: 18px;
+        padding: 18px 28px;
+        background-color: #1976d2;
         color: white;
         border: none;
-        border-radius: 8px;
-        font-size: 16px;
+        border-radius: 50px;
+        font-size: 1.3em;
         font-weight: bold;
         cursor: pointer;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 12px rgba(25,118,210,0.15);
         transition: all 0.3s ease;
-      }
-      #syncButton:hover {
-        background-color: #45a049;
-        box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        z-index: 10;
       }
       #syncButton:active {
-        transform: scale(0.95);
+        transform: scale(0.97);
       }
       #syncButton:disabled {
         background-color: #cccccc;
         cursor: not-allowed;
       }
-      
       .spinner-small {
         border: 3px solid #f3f3f3;
-        border-top: 3px solid white;
+        border-top: 3px solid #1976d2;
         border-radius: 50%;
-        width: 16px;
-        height: 16px;
+        width: 18px;
+        height: 18px;
         animation: spin 1s linear infinite;
         display: inline-block;
         vertical-align: middle;
         margin-right: 8px;
       }
-      
       @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
       }
-      
-      .red-background {
-        background-color: #ff0000 !important;
+      .fade {
+        animation: fadein 0.5s;
       }
-      
-      .red-background h2,
-      .red-background h3,
-      .red-background span {
-        color: white !important;
+      @keyframes fadein {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      #rfidInput {
+        opacity: 0;
+        position: absolute;
       }
     </style>
   </head>
   <body>
-    <button id="syncButton" onclick="syncData()">SYNC</button>
-    
-    <h2>Sistem Pendataan Makan Karyawan</h2>
-
+    <button id="syncButton" onclick="syncData()">
+      <span style="vertical-align:middle;">&#x21bb;</span> SYNC
+    </button>
     <input id="rfidInput" autofocus />
-
-    <div style="margin-top: 10px">
-      <h3><span id="nama">NAMA</span></h3>
-      <h3><span id="message"></span></h3>
-      <h3><span id="statusMakan"></span></h3>
+    <div class="main-card fade">
+      <div class="nama" id="nama">NAMA</div>
+      <div class="message" id="message"></div>
+      <div>
+        <span id="statusMakan" class="status-badge">-</span>
+      </div>
     </div>
 
     <script>
@@ -106,95 +149,121 @@
       async function syncData() {
         syncButton.disabled = true;
         syncButton.innerHTML = '<span class="spinner-small"></span>SYNCING...';
-        
         try {
           const res = await fetch("http://localhost:3000/sync", {
             method: "POST",
             headers: { "Content-Type": "application/json" }
           });
-          
           const result = await res.json();
-          console.log("Sync result:", result);
-          
           message.textContent = result.message || "Sinkronisasi berhasil!";
+          message.classList.add('fade');
           setTimeout(() => {
             message.textContent = "";
-          }, 3000);
+            message.classList.remove('fade');
+          }, 2500);
         } catch (err) {
-          console.error("Sync error:", err);
           message.textContent = "Gagal sinkronisasi!";
+          message.classList.add('fade');
           setTimeout(() => {
             message.textContent = "";
-          }, 3000);
+            message.classList.remove('fade');
+          }, 2500);
         } finally {
           syncButton.disabled = false;
-          syncButton.innerHTML = "SYNC";
+          syncButton.innerHTML = '<span style="vertical-align:middle;">&#x21bb;</span> SYNC';
         }
       }
 
       input.addEventListener("input", async () => {
-
+        const mainCard = document.querySelector('.main-card');
         if (input.value.trim().length == 10) {
           rfid = input.value.trim();
-
           message.textContent = "";
           namaKyw.textContent = "";
-          console.log(rfid, "=====");
-
-      
+          statusMakan.textContent = "-";
+          statusMakan.classList.remove('red');
+          statusMakan.classList.remove('fade');
+          namaKyw.classList.remove('fade');
+          message.classList.remove('fade');
+          mainCard.classList.remove('red');
           try {
-            // const res = await fetch("https://services.ama.id/employee/makan", {
             const res = await fetch("http://localhost:3000/makan", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ rfid }),
             });
-              
             const result = await res.json();
-            console.log("response", result);
-
             if (result.data) {
               namaKyw.textContent = result.data.nama;
-
+              namaKyw.classList.add('fade');
               if (result.message === "Scan diluar jam") {
                 message.textContent = result.message;
+                message.classList.add('fade');
               }
-
-              // Update status makan
               let statusText = "";
               if (result.data.ismakan && result.data.actual_makan) {
                 statusText = "Silahkan Makan";
-                document.body.classList.remove('red-background');
+                statusMakan.classList.remove('red');
+                mainCard.classList.remove('red');
               } else if (result.data.ismakan) {
                 statusText = "Anda Terdaftar Makan";
-                document.body.classList.remove('red-background');
+                statusMakan.classList.remove('red');
+                mainCard.classList.remove('red');
               } else if (result.data.actual_makan) {
-                statusText = "Anda Tidak Terdaftar Makan";
-                document.body.classList.add('red-background');
-                // Reset background setelah 3 detik
+                statusText = "Tidak Terdaftar Makan";
+                statusMakan.classList.add('red');
+                mainCard.classList.add('red');
+                // Reset card setelah 2.5 detik
                 setTimeout(() => {
-                  document.body.classList.remove('red-background');
                   namaKyw.textContent = "NAMA";
-                  statusMakan.textContent = "";
-                }, 3000);
+                  statusMakan.textContent = "-";
+                  statusMakan.classList.remove('red');
+                  mainCard.classList.remove('red');
+                  namaKyw.classList.remove('fade');
+                  statusMakan.classList.remove('fade');
+                }, 2500);
               } else {
-                document.body.classList.remove('red-background');
+                statusMakan.classList.remove('red');
+                mainCard.classList.remove('red');
               }
               statusMakan.textContent = statusText;
-
+              statusMakan.classList.add('fade');
             } else {
-              // namaKyw.textContent = "Tidak ditemukan";
-              namaKyw.textContent = result.message || "";
+              namaKyw.textContent = result.message || "Tidak ditemukan";
+              namaKyw.classList.add('fade');
+              statusMakan.textContent = "-";
+              statusMakan.classList.add('red');
+              statusMakan.classList.add('fade');
+              mainCard.classList.add('red');
+              setTimeout(() => {
+                namaKyw.textContent = "NAMA";
+                statusMakan.textContent = "-";
+                statusMakan.classList.remove('red');
+                mainCard.classList.remove('red');
+                namaKyw.classList.remove('fade');
+                statusMakan.classList.remove('fade');
+              }, 2500);
             }
             rfid = "";
-            input.value = ""
+            input.value = "";
           } catch (err) {
-            namaKyw.textContent = err;
-            console.log("ERRORRR", err);
+            namaKyw.textContent = "ERROR";
+            namaKyw.classList.add('fade');
+            statusMakan.textContent = "-";
+            statusMakan.classList.add('red');
+            statusMakan.classList.add('fade');
+            mainCard.classList.add('red');
+            setTimeout(() => {
+              namaKyw.textContent = "NAMA";
+              statusMakan.textContent = "-";
+              statusMakan.classList.remove('red');
+              mainCard.classList.remove('red');
+              namaKyw.classList.remove('fade');
+              statusMakan.classList.remove('fade');
+            }, 2500);
             rfid = "";
-            input.value = ""
+            input.value = "";
           }
-          input.value = "";
         }
       });
     </script>

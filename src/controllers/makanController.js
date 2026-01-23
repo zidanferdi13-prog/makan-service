@@ -13,7 +13,7 @@ module.exports = {
       let now = new Date();
       let now_wib = new Date(now.getTime() + (7 * 60 * 60 * 1000));
       let tanggal = now_wib.toISOString().split("T")[0];
-      // let tanggal = "2025-12-18";
+      // let tanggal = "2026-01-14"; // for testing purpose
 
       console.log("\n=== [MAKAN] PROSES SCAN DIMULAI ===");
       console.log("[INPUT] RFID:", rfid);
@@ -33,15 +33,14 @@ module.exports = {
       let jamScan = now_wib.toISOString().slice(0, 19).replace('T', ' ');
       let jamOnly = jamScan.split(' ')[1]; // Ambil bagian waktu saja untuk pengecekan shift
 
-      // let jamScan = "2025-12-18 12:30:00";
-      // let jamOnly = "12:30:00";
+      // let jamScan = "2026-01-14 10:40:00";
+      // let jamOnly = "10:40:00";
 
-      console.log("[SCAN] Jam Scan (Full):", jamScan);
-      console.log("[SCAN] Jam Scan (Time only):", jamOnly);
+      // console.log("[SCAN] Jam Scan (Full):", jamScan);
+      // console.log("[SCAN] Jam Scan (Time only):", jamOnly);
 
       let ismakan = null;
       let actMkn = null;
-      let WaktuShift = null;
       let waktuMakan = null;
       let waktuPesan = null;
 
@@ -64,9 +63,20 @@ module.exports = {
         }
       }
 
+      let waktuShift = isWaktuShift(jamOnly);
+      if (!waktuShift) {
+        console.log("[ERROR] Jam Scan Tidak Sesuai Dengan Waktu Shift Makan");
+        return res.json({
+          message: `Scan diluar jam`,
+          data: {
+            jamScan: jamScan,
+          },
+        });
+      }
+
       //ambil data karyawan dari rfid
       let ambilData = await request.query(
-        `select m_karyawan_id, nama from m_karyawan where rfid = ?`,
+        `SELECT m_karyawan_id, nama FROM m_karyawan WHERE rfid = ? and isactive = 1`,
         [rfid]
       );
       if (ambilData[0].length == 0) {
@@ -77,46 +87,58 @@ module.exports = {
       let data = ambilData[0][0];
       console.log("[DB] Data Karyawan Ditemukan:", { id: data.m_karyawan_id, nama: data.nama });
 
-      //cek apakah sebelumnya sudah scan atau belum
-      let cekMakan = await request.query(
-        `select * from m_makan_karyawan where m_karyawan_id = ? and tanggal =?`,
+      // Cek semua data makan pada tanggal tsb untuk karyawan ini
+      let cekMakanAll = await request.query(
+        `SELECT * FROM m_makan_karyawan WHERE m_karyawan_id = ? AND tanggal = ?`,
         [data.m_karyawan_id, tanggal]
       );
-
-      console.log("[DB] Cek Data Makan Existing:", cekMakan[0].length > 0 ? "Sudah Ada" : "Tidak Ada");
-
-      if (cekMakan[0].length > 0) {
-        //kalau sudah scan makan, update ismakan = 1
-        let existingData = cekMakan[0][0];
-        ismakan = existingData.ismakan;
-        actMkn = existingData.actual_makan;
-
-        console.log("[UPDATE] Data Existing - ismakan:", ismakan, "actual_makan:", actMkn);
-
-        if (
-          isWaktuMakan(jamOnly, shift1_in) || isWaktuMakan(jamOnly, shift2_in) || isWaktuMakan(jamOnly, shift3_in)  
-        ) {
-          ismakan = 1;
-          waktuPesan = jamOnly;
-          isWaktuShift(jamOnly);
-          console.log("[LOGIC] Waktu Makan Shift In Terdeteksi - Shift:", WaktuShift);
-          await request.query(
-            `update m_makan_karyawan set ismakan=?, shift=?, waktu_pesan=? where m_karyawan_id=? and tanggal =?`,
-            [ismakan, WaktuShift, waktuPesan, data.m_karyawan_id, tanggal]
-          );
-          console.log("[DB] Update Berhasil - ismakan=1, shift=", WaktuShift);
-        } else if (
-          isWaktuMakan(jamOnly, shift1_out) || isWaktuMakan(jamOnly, shift2_out) || isWaktuMakan(jamOnly, shift3_out)  
-        ) {
-          actMkn = 1;
-          waktuMakan = jamOnly;
-          isWaktuShift(jamOnly);
-          console.log("[LOGIC] Waktu Makan Shift Out Terdeteksi - Shift:", WaktuShift);
-          await request.query(
-            `update m_makan_karyawan set actual_makan=?, shift=?, waktu_makan=? where m_karyawan_id=? and tanggal =?`,
-            [actMkn, WaktuShift, waktuMakan, data.m_karyawan_id, tanggal]
-          );
-          console.log("[DB] Update Berhasil - actual_makan=1, shift=", WaktuShift);
+      // Cek apakah sudah ada row untuk shift ini
+      let existingShift = cekMakanAll[0].find(row => row.shift == waktuShift);
+      if (existingShift) {
+        ismakan = existingShift.ismakan;
+        actMkn = existingShift.actual_makan;
+        // IN
+        if (isWaktuMakan(jamOnly, shift1_in) || isWaktuMakan(jamOnly, shift2_in) || isWaktuMakan(jamOnly, shift3_in)) {
+          if (ismakan === 1) {
+            console.log("[ERROR] Makan Sudah Dikonfirmasi Sebelumnya - ismakan=1");
+            return res.json({
+              message: `Makan sudah dikonfirmasi sebelumnya`,
+              data: {
+                nama: data.nama,
+                jamScan: jamScan,
+              },
+            });
+          } else {
+            console.log("[UPDATE] Konfirmasi Makan - Mengubah ismakan dari 0 ke 1");
+            ismakan = 1;
+            waktuPesan = jamOnly;
+            await request.query(
+              `UPDATE m_makan_karyawan SET ismakan=?, waktu_pesan=? WHERE m_karyawan_id=? AND tanggal =? AND shift=?`,
+              [ismakan, waktuPesan, data.m_karyawan_id, tanggal, waktuShift]
+            );
+            console.log("[DB] Update Berhasil - ismakan=1, shift=", waktuShift);
+          }
+        // OUT
+        } else if (isWaktuMakan(jamOnly, shift1_out) || isWaktuMakan(jamOnly, shift2_out) || isWaktuMakan(jamOnly, shift3_out)) {
+          if (actMkn === 1) {
+            console.log("[ERROR] Makan Sudah Dikonfirmasi Sebelumnya - actual_makan=1");
+            return res.json({
+              message: `Makan sudah dikonfirmasi sebelumnya`,
+              data: {
+                nama: data.nama,
+                jamScan: jamScan,
+              },
+            });
+          } else {
+            console.log("[UPDATE] Konfirmasi Makan - Mengubah actual_makan dari 0 ke 1");
+            actMkn = 1;
+            waktuMakan = jamOnly;
+            await request.query(
+              `UPDATE m_makan_karyawan SET actual_makan=?, waktu_makan=? WHERE m_karyawan_id=? AND tanggal =? AND shift=?`,
+              [actMkn, waktuMakan, data.m_karyawan_id, tanggal, waktuShift]
+            );
+            console.log("[DB] Update Berhasil - actual_makan=1, shift=", waktuShift);
+          }
         } else {
           console.log("[ERROR] Scan Diluar Jam Operasional - Jam:", jamOnly);
           return res.json({
@@ -127,7 +149,6 @@ module.exports = {
             },
           });
         }
-
         //response data tampilkan nama dan ismakan
         const responseData = {
           message: `berhasil`,
@@ -138,10 +159,9 @@ module.exports = {
             ismakan: ismakan,
             actual_makan: actMkn,
             jamScan: jamScan,
-            waktuShift: WaktuShift,
+            waktuShift: waktuShift,
           },
         };
-
         console.log("[RESPONSE] Update Berhasil:", responseData.data);
         console.log("=== [MAKAN] PROSES SELESAI ===\n");
         return res.json(responseData);
@@ -153,12 +173,11 @@ module.exports = {
           isWaktuMakan(jamOnly, shift1_in) || isWaktuMakan(jamOnly, shift2_in) || isWaktuMakan(jamOnly, shift3_in)
         ) {
           ismakan = 1;
-          isWaktuShift(jamOnly);
           waktuPesan = jamOnly;
-          console.log("[LOGIC] Shift In Terdeteksi - Shift:", WaktuShift);
+          console.log("[LOGIC] Shift In Terdeteksi - Shift:", waktuShift);
 
           // Penanganan khusus untuk Shift 1 Night Shift
-          if (isWaktuMakan(jamOnly, shift1_in)) {
+          if (waktuShift === 1) { 
             console.log("[LOGIC] Shift 1 Night Shift Detected - Increment Tanggal +1");
             // Tambah 1 hari untuk tanggal (tanpa mengubah timezone)
             let tglDate = new Date(tanggal + 'T00:00:00');
@@ -186,8 +205,7 @@ module.exports = {
         ) {
           actMkn = 1;
           waktuMakan = jamOnly;
-          isWaktuShift(jamOnly);
-          console.log("[LOGIC] Shift Out Terdeteksi - Shift:", WaktuShift);
+          console.log("[LOGIC] Shift Out Terdeteksi - Shift:", waktuShift);
         } else {
           console.log("[ERROR] Scan Diluar Jam Operasional - Jam:", jamOnly);
           return res.json({
@@ -210,7 +228,7 @@ module.exports = {
           data.nama,
           ismakan,
           actMkn,
-          WaktuShift,
+          waktuShift,
           jamScan,
           waktuPesan,
           waktuMakan
@@ -227,7 +245,7 @@ module.exports = {
             ismakan: ismakan,
             actual_makan: actMkn,
             jamScan: jamScan,
-            waktuShift: WaktuShift,
+            waktuShift: waktuShift,
           },
         };
 
