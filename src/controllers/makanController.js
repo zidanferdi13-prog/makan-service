@@ -7,259 +7,155 @@ module.exports = {
   makan: async function (req, res) {
     try {
       const request = DBConf.promise();
-      let { rfid } = req.body;
-      let uuid = uuidv4();
+      const { rfid } = req.body;
+      const uuid = uuidv4();
 
-      let now = new Date();
-      let now_wib = new Date(now.getTime() + (7 * 60 * 60 * 1000));
-      let tanggal = now_wib.toISOString().split("T")[0];
-      // let tanggal = "2026-01-14"; // for testing purpose
+      // ================= TIME =================
+      const now = new Date();
+      const now_wib = new Date(now.getTime() + 7 * 60 * 60 * 1000);
 
-      console.log("\n=== [MAKAN] PROSES SCAN DIMULAI ===");
-      console.log("[INPUT] RFID:", rfid);
-      console.log("[TIME] Waktu UTC:", now.toISOString());
-      console.log("[TIME] Waktu WIB:", now_wib.toISOString());
-      console.log("[DATE] Tanggal:", tanggal);
+      const tanggal = now_wib.toISOString().split("T")[0];
+      const jamScan = now_wib.toISOString().slice(0, 19).replace("T", " ");
+      const jamOnly = jamScan.split(" ")[1];
 
-      const shift1_in = { mulai: "20:00:00", selesai: "23:59:00" };
-      const shift1_out = { mulai: "03:00:00", selesai: "04:00:00" };
-
+      // ================= SHIFT =================
+      const shift1_in = { mulai: "20:00:00", selesai: "23:59:59" };
+      const shift1_out = { mulai: "00:00:00", selesai: "04:00:00" };
       const shift2_in = { mulai: "06:00:00", selesai: "11:00:00" };
       const shift2_out = { mulai: "11:30:00", selesai: "14:00:00" };
-
       const shift3_in = { mulai: "14:30:00", selesai: "16:00:00" };
       const shift3_out = { mulai: "17:00:00", selesai: "19:30:00" };
 
-      let jamScan = now_wib.toISOString().slice(0, 19).replace('T', ' ');
-      let jamOnly = jamScan.split(' ')[1]; // Ambil bagian waktu saja untuk pengecekan shift
+      const inRange = (jam, r) => jam >= r.mulai && jam <= r.selesai;
 
-      // let jamScan = "2026-01-14 10:40:00";
-      // let jamOnly = "10:40:00";
-
-      // console.log("[SCAN] Jam Scan (Full):", jamScan);
-      // console.log("[SCAN] Jam Scan (Time only):", jamOnly);
-
-      let ismakan = null;
-      let actMkn = null;
-      let waktuMakan = null;
-      let waktuPesan = null;
-
-      function isWaktuMakan(jam, shift) {
-        return jam >= shift.mulai && jam <= shift.selesai;
+      function getShift(jam) {
+        if (inRange(jam, shift1_in) || inRange(jam, shift1_out)) return 1;
+        if (inRange(jam, shift2_in) || inRange(jam, shift2_out)) return 2;
+        if (inRange(jam, shift3_in) || inRange(jam, shift3_out)) return 3;
+        return null;
       }
 
-      function isWaktuShift(jamOnly) {
-        if (isWaktuMakan(jamOnly, shift1_in) || isWaktuMakan(jamOnly, shift1_out)) {
-          WaktuShift = 1;
-          return WaktuShift;
-        } else if (isWaktuMakan(jamOnly, shift2_in) || isWaktuMakan(jamOnly, shift2_out)) {
-          WaktuShift = 2;
-          return WaktuShift;
-        } else if (isWaktuMakan(jamOnly, shift3_in) || isWaktuMakan(jamOnly, shift3_out)) {
-          WaktuShift = 3;
-          return WaktuShift;
-        } else {
-          return null;
-        }
-      }
+      const shift = getShift(jamOnly);
+      if (!shift) return res.json({ message: "Diluar jam makan" });
 
-      let waktuShift = isWaktuShift(jamOnly);
-      if (!waktuShift) {
-        console.log("[ERROR] Jam Scan Tidak Sesuai Dengan Waktu Shift Makan");
-        return res.json({
-          message: `Scan diluar jam`,
-          data: {
-            jamScan: jamScan,
-          },
-        });
-      }
+      const isIn =
+        inRange(jamOnly, shift1_in) ||
+        inRange(jamOnly, shift2_in) ||
+        inRange(jamOnly, shift3_in);
 
-      //ambil data karyawan dari rfid
-      let ambilData = await request.query(
-        `SELECT m_karyawan_id, nama FROM m_karyawan WHERE rfid = ? and isactive = 1`,
+      const isOut =
+        inRange(jamOnly, shift1_out) ||
+        inRange(jamOnly, shift2_out) ||
+        inRange(jamOnly, shift3_out);
+
+      // ================= KARYAWAN =================
+      const [kRows] = await request.query(
+        `SELECT m_karyawan_id, nama 
+                    FROM m_karyawan 
+                    WHERE rfid=? AND isactive=1`,
         [rfid]
       );
-      if (ambilData[0].length == 0) {
-        console.log("[ERROR] RFID tidak ditemukan di database");
-        return res.json({ message: "RFID tidak ditemukan" });
+
+      if (!kRows.length) return res.json({ message: "RFID tidak ditemukan" });
+      const karyawan = kRows[0];
+
+      // ================= BUSINESS DATE =================
+      let business_date = tanggal;
+      let tanggalInsert = tanggal;
+
+      if (shift === 1 && isIn) {
+        // shift1 daftar
+        let besok = new Date(tanggal);
+        besok.setDate(besok.getDate() + 1);
+        business_date = besok.toISOString().split("T")[0];
       }
 
-      let data = ambilData[0][0];
-      console.log("[DB] Data Karyawan Ditemukan:", { id: data.m_karyawan_id, nama: data.nama });
+      if (shift === 1 && isOut) {
+        business_date = tanggal;
 
-      // Cek semua data makan pada tanggal tsb untuk karyawan ini
-      let cekMakanAll = await request.query(
-        `SELECT * FROM m_makan_karyawan WHERE m_karyawan_id = ? AND tanggal = ?`,
-        [data.m_karyawan_id, tanggal]
+        // jika belum ada row → tanggal produksi kemarin
+        let kemarin = new Date(tanggal);
+        kemarin.setDate(kemarin.getDate() - 1);
+        tanggalInsert = kemarin.toISOString().split("T")[0];
+      }
+
+      // ================= UPSERT LOGIC =================
+      // pakai unique index → anti double
+      const [rows] = await request.query(
+        `SELECT * FROM m_makan_karyawan
+                    WHERE m_karyawan_id=? 
+                    AND shift=? 
+                    AND business_date=?`,
+        [karyawan.m_karyawan_id, shift, business_date]
       );
-      // Cek apakah sudah ada row untuk shift ini
-      let existingShift = cekMakanAll[0].find(row => row.shift == waktuShift);
-      if (existingShift) {
-        ismakan = existingShift.ismakan;
-        actMkn = existingShift.actual_makan;
+
+      // ================= UPDATE =================
+      if (rows.length > 0) {
+        const row = rows[0];
+
         // IN
-        if (isWaktuMakan(jamOnly, shift1_in) || isWaktuMakan(jamOnly, shift2_in) || isWaktuMakan(jamOnly, shift3_in)) {
-          if (ismakan === 1) {
-            console.log("[ERROR] Makan Sudah Dikonfirmasi Sebelumnya - ismakan=1");
-            return res.json({
-              message: `Makan sudah dikonfirmasi sebelumnya`,
-              data: {
-                nama: data.nama,
-                jamScan: jamScan,
-              },
-            });
-          } else {
-            console.log("[UPDATE] Konfirmasi Makan - Mengubah ismakan dari 0 ke 1");
-            ismakan = 1;
-            waktuPesan = jamOnly;
-            await request.query(
-              `UPDATE m_makan_karyawan SET ismakan=?, waktu_pesan=? WHERE m_karyawan_id=? AND tanggal =? AND shift=?`,
-              [ismakan, waktuPesan, data.m_karyawan_id, tanggal, waktuShift]
-            );
-            console.log("[DB] Update Berhasil - ismakan=1, shift=", waktuShift);
-          }
+        if (isIn && row.ismakan !== 1) {
+          await request.query(
+            `UPDATE m_makan_karyawan 
+                            SET ismakan=1, waktu_pesan=? 
+                            WHERE m_makan_karyawan_id=?`,
+            [jamOnly, row.m_makan_karyawan_id]
+          );
+
+          return res.json({ message: "Daftar makan", nama: karyawan.nama });
+        }
+
         // OUT
-        } else if (isWaktuMakan(jamOnly, shift1_out) || isWaktuMakan(jamOnly, shift2_out) || isWaktuMakan(jamOnly, shift3_out)) {
-          if (actMkn === 1) {
-            console.log("[ERROR] Makan Sudah Dikonfirmasi Sebelumnya - actual_makan=1");
-            return res.json({
-              message: `Makan sudah dikonfirmasi sebelumnya`,
-              data: {
-                nama: data.nama,
-                jamScan: jamScan,
-              },
-            });
-          } else {
-            console.log("[UPDATE] Konfirmasi Makan - Mengubah actual_makan dari 0 ke 1");
-            actMkn = 1;
-            waktuMakan = jamOnly;
-            await request.query(
-              `UPDATE m_makan_karyawan SET actual_makan=?, waktu_makan=? WHERE m_karyawan_id=? AND tanggal =? AND shift=?`,
-              [actMkn, waktuMakan, data.m_karyawan_id, tanggal, waktuShift]
-            );
-            console.log("[DB] Update Berhasil - actual_makan=1, shift=", waktuShift);
-          }
-        } else {
-          console.log("[ERROR] Scan Diluar Jam Operasional - Jam:", jamOnly);
-          return res.json({
-            message: `Scan diluar jam`,
-            data: {
-              nama: data.nama,
-              jamScan: jamScan,
-            },
-          });
-        }
-        //response data tampilkan nama dan ismakan
-        const responseData = {
-          message: `berhasil`,
-          data: {
-            m_karyawan_id: data.m_karyawan_id,
-            nama: data.nama,
-            tanggal: tanggal,
-            ismakan: ismakan,
-            actual_makan: actMkn,
-            jamScan: jamScan,
-            waktuShift: waktuShift,
-          },
-        };
-        console.log("[RESPONSE] Update Berhasil:", responseData.data);
-        console.log("=== [MAKAN] PROSES SELESAI ===\n");
-        return res.json(responseData);
-      } else {
-        //belum scan konfirm makan
-        console.log("[INSERT] Data Baru - Akan Membuat Record Baru");
+        if (isOut && row.actual_makan !== 1) {
+          await request.query(
+            `UPDATE m_makan_karyawan 
+                            SET actual_makan=1, waktu_makan=? 
+                            WHERE m_makan_karyawan_id=?`,
+            [jamOnly, row.m_makan_karyawan_id]
+          );
 
-        if (
-          isWaktuMakan(jamOnly, shift1_in) || isWaktuMakan(jamOnly, shift2_in) || isWaktuMakan(jamOnly, shift3_in)
-        ) {
-          ismakan = 1;
-          waktuPesan = jamOnly;
-          console.log("[LOGIC] Shift In Terdeteksi - Shift:", waktuShift);
-
-          // Penanganan khusus untuk Shift 1 Night Shift
-          if (waktuShift === 1) { 
-            console.log("[LOGIC] Shift 1 Night Shift Detected - Increment Tanggal +1");
-            // Tambah 1 hari untuk tanggal (tanpa mengubah timezone)
-            let tglDate = new Date(tanggal + 'T00:00:00');
-            tglDate.setDate(tglDate.getDate() + 1);
-            let year = tglDate.getFullYear();
-            let month = String(tglDate.getMonth() + 1).padStart(2, '0');
-            let day = String(tglDate.getDate()).padStart(2, '0');
-            let tanggalBefore = tanggal;
-            tanggal = `${year}-${month}-${day}`;
-            console.log(`[LOGIC] Tanggal Berubah: ${tanggalBefore} → ${tanggal}`);
-            
-            // Tambah 1 hari untuk jamScan (waktu tetap sama, hanya tanggal yang berubah)
-            let [tgl, waktu] = jamScan.split(' ');
-            let jamDate = new Date(tgl + 'T00:00:00');
-            jamDate.setDate(jamDate.getDate() + 1);
-            let yearJam = jamDate.getFullYear();
-            let monthJam = String(jamDate.getMonth() + 1).padStart(2, '0');
-            let dayJam = String(jamDate.getDate()).padStart(2, '0');
-            let jamScanBefore = jamScan;
-            jamScan = `${yearJam}-${monthJam}-${dayJam} ${waktu}`;
-            console.log(`[LOGIC] JamScan Berubah: ${jamScanBefore} → ${jamScan}`);
-          }
-        } else if (
-          isWaktuMakan(jamOnly, shift1_out) || isWaktuMakan(jamOnly, shift2_out) || isWaktuMakan(jamOnly, shift3_out)
-        ) {
-          actMkn = 1;
-          waktuMakan = jamOnly;
-          console.log("[LOGIC] Shift Out Terdeteksi - Shift:", waktuShift);
-        } else {
-          console.log("[ERROR] Scan Diluar Jam Operasional - Jam:", jamOnly);
-          return res.json({
-            message: `Scan diluar jam`,
-            data: {
-              nama: data.nama,
-              jamScan: jamScan,
-            },
-          });
+          return res.json({ message: "Makan diambil", nama: karyawan.nama });
         }
 
-        let queryInsert = `
-        insert into m_makan_karyawan (m_makan_karyawan_id, m_karyawan_id, tanggal, nama, ismakan, actual_makan, shift, createdate, waktu_pesan, waktu_makan) 
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-        let insertdata = [
+        return res.json({ message: "Sudah tercatat", nama: karyawan.nama });
+      }
+
+      // ================= INSERT =================
+      const ismakan = isIn ? 1 : 0;
+      const actual = isOut ? 1 : 0;
+      const waktuPesan = isIn ? jamOnly : null;
+      const waktuMakan = isOut ? jamOnly : null;
+
+      await request.query(
+        `INSERT INTO m_makan_karyawan
+                    (m_makan_karyawan_id, m_karyawan_id, tanggal, nama,
+                        ismakan, actual_makan, shift, createdate,
+                        waktu_pesan, waktu_makan, business_date)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [
           uuid,
-          data.m_karyawan_id,
-          tanggal,
-          data.nama,
+          karyawan.m_karyawan_id,
+          tanggalInsert,
+          karyawan.nama,
           ismakan,
-          actMkn,
-          waktuShift,
+          actual,
+          shift,
           jamScan,
           waktuPesan,
-          waktuMakan
-        ];
-        await request.query(queryInsert, insertdata);
-        console.log("[DB] Insert Berhasil - UUID:", uuid);
+          waktuMakan,
+          business_date,
+        ]
+      );
 
-        const responseData = {
-          message: `berhasil`,
-          data: {
-            m_karyawan_id: data.m_karyawan_id,
-            nama: data.nama,
-            tanggal: tanggal,
-            ismakan: ismakan,
-            actual_makan: actMkn,
-            jamScan: jamScan,
-            waktuShift: waktuShift,
-          },
-        };
-
-        console.log("[RESPONSE] Insert Berhasil:", responseData.data);
-        console.log("=== [MAKAN] PROSES SELESAI ===\n");
-        return res.json(responseData);
-      }
-    } catch (error) {
-      console.log("[ERROR] Exception Caught:", error.message);
-      console.log("=== [MAKAN] PROSES GAGAL ===\n");
-      res.status(500).json({
-        message: "Error! Gagal input data makan",
-        data: error,
+      return res.json({
+        message: actual ? "Makan diambil" : "Daftar makan",
+        nama: karyawan.nama,
+        shift,
       });
+
+    } catch (err) {
+      console.log(err);
+      res.status(500).json({ message: "Server error", err });
     }
   },
 

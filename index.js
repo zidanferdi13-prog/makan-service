@@ -27,6 +27,7 @@ app.get("/", (req, res) => {
 });
 
 app.post("/makan", makan);
+app.post("/makanNew", require("./src/controllers/newController").makanNew);
 app.post("/findMakan", findMakan);
 
 // Route untuk trigger manual sync
