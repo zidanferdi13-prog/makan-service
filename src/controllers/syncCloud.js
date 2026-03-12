@@ -71,10 +71,15 @@ getDataCloud = async () => {
     let errors = 0;
 
     // ===== normalize business_date =====
-    function normalizeDate(dateStr) {
+    function normalizeBusinessDate(dateStr) {
       if (!dateStr) return null;
+
       const d = new Date(dateStr);
-      return d.toISOString().split("T")[0];
+
+      // convert ke WIB (+7)
+      const wib = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+
+      return wib.toISOString().slice(0, 10);
     }
 
     for (const item of data) {
@@ -93,7 +98,7 @@ getDataCloud = async () => {
           business_date,
         } = item;
 
-        const businessDateNormalized = normalizeDate(business_date);
+        const businessDateNormalized = normalizeBusinessDate(business_date);
 
         // ================= CEK DULU =================
         const [existing] = await connection.query(

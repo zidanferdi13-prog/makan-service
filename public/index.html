@@ -193,35 +193,22 @@
               body: JSON.stringify({ rfid }),
             });
             const result = await res.json();
-            if (result.data) {
-              namaKyw.textContent = result.data.nama;
+            if (result.nama) {
+              namaKyw.textContent = result.nama;
               namaKyw.classList.add('fade');
-              if (result.message === "Scan diluar jam") {
-                message.textContent = result.message;
-                message.classList.add('fade');
-              }
               let statusText = "";
-              if (result.data.ismakan && result.data.actual_makan) {
+              if (result.message === "Makan diambil") {
                 statusText = "Silahkan Makan";
                 statusMakan.classList.remove('red');
                 mainCard.classList.remove('red');
-              } else if (result.data.ismakan) {
+              } else if (result.message === "Daftar makan") {
                 statusText = "Anda Terdaftar Makan";
                 statusMakan.classList.remove('red');
                 mainCard.classList.remove('red');
-              } else if (result.data.actual_makan) {
-                statusText = "Tidak Terdaftar Makan";
-                statusMakan.classList.add('red');
-                mainCard.classList.add('red');
-                // Reset card setelah 2.5 detik
-                setTimeout(() => {
-                  namaKyw.textContent = "NAMA";
-                  statusMakan.textContent = "-";
-                  statusMakan.classList.remove('red');
-                  mainCard.classList.remove('red');
-                  namaKyw.classList.remove('fade');
-                  statusMakan.classList.remove('fade');
-                }, 2500);
+              } else if (result.message === "Sudah tercatat") {
+                statusText = "Sudah Tercatat";
+                statusMakan.classList.remove('red');
+                mainCard.classList.remove('red');
               } else {
                 statusMakan.classList.remove('red');
                 mainCard.classList.remove('red');

@@ -5,6 +5,7 @@ const { API_BASE_URL, API_ENDPOINTS } = require("../config/apiConfig");
 module.exports = {
     makanNew: async function (req, res) {
         try {
+          console.log("\n=== [MAKAN NEW] PROSES SCAN DIMULAI ===");
             const request = DBConf.promise();
             const { rfid } = req.body;
             const uuid = uuidv4();
@@ -80,20 +81,42 @@ module.exports = {
 
             // ================= UPSERT LOGIC =================
             // pakai unique index → anti double
-            const [rows] = await request.query(
-                `SELECT * FROM m_makan_karyawan
-                    WHERE m_karyawan_id=? 
-                    AND shift=? 
-                    AND business_date=?`,
-                [karyawan.m_karyawan_id, shift, business_date]
-            );
+            let queryRows = `SELECT * FROM m_makan_karyawan
+                WHERE m_karyawan_id=? 
+                AND shift=? 
+                AND business_date=?`;
+            let queryParams = [karyawan.m_karyawan_id, shift, business_date];
+
+            // fallback legacy untuk shift 1 OUT:
+            // ada data lama yang tersimpan pakai tanggal produksi (H-1)
+            if (shift === 1 && isOut) {
+              queryRows = `SELECT * FROM m_makan_karyawan
+                WHERE m_karyawan_id=? 
+                AND shift=? 
+                AND (business_date=? OR tanggal=?)`;
+              queryParams = [karyawan.m_karyawan_id, shift, business_date, tanggalInsert];
+            }
+
+            const [rows] = await request.query(queryRows, queryParams);
 
             // ================= UPDATE =================
             if (rows.length > 0) {
-                const row = rows[0];
+              const toNumber = (value) => Number(value ?? 0);
+
+              let row = rows[0];
+
+              if (isIn) {
+                const pendingIn = rows.find((item) => toNumber(item.ismakan) !== 1);
+                if (pendingIn) row = pendingIn;
+              }
+
+              if (isOut) {
+                const pendingOut = rows.find((item) => toNumber(item.actual_makan) !== 1);
+                if (pendingOut) row = pendingOut;
+              }
 
                 // IN
-                if (isIn && row.ismakan !== 1) {
+                if (isIn && toNumber(row.ismakan) !== 1) {
                     await request.query(
                         `UPDATE m_makan_karyawan 
                             SET ismakan=1, waktu_pesan=? 
@@ -105,7 +128,7 @@ module.exports = {
                 }
 
                 // OUT
-                if (isOut && row.actual_makan !== 1) {
+                if (isOut && toNumber(row.actual_makan) !== 1) {
                     await request.query(
                         `UPDATE m_makan_karyawan 
                             SET actual_makan=1, waktu_makan=? 
