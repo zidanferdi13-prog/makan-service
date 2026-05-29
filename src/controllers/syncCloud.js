@@ -8,7 +8,7 @@ const getDataDevice = async () => {
 
     // Ambil semua data dari m_makan_karyawan
     const [rows] = await connection.query(
-      'SELECT m_makan_karyawan_id, DATE_FORMAT(createdate, \'%Y-%m-%d %H:%i:%s\') AS createdate, nama, tanggal, ismakan, m_karyawan_id, actual_makan, shift, waktu_pesan, waktu_makan, business_date \
+      'SELECT m_makan_karyawan_id, DATE_FORMAT(createdate, \'%Y-%m-%d %H:%i:%s\') AS createdate, nama, tanggal, ismakan, m_karyawan_id, actual_makan, shift, waktu_pesan, waktu_makan, DATE_FORMAT(business_date, \'%Y-%m-%d\') AS business_date \
       FROM m_makan_karyawan WHERE tanggal = CURDATE() ORDER BY createdate DESC'
     );
 

@@ -2,11 +2,12 @@ const { v4: uuidv4 } = require("uuid");
 const { DBConf } = require("../config/database");
 const axios = require("axios");
 const { API_BASE_URL, API_ENDPOINTS } = require("../config/apiConfig");
+const logger = require("../utils/logger");
 
 module.exports = {
   makan: async function (req, res) {
     try {
-      console.log("\n=== [MAKAN] PROSES SCAN DIMULAI ===");
+      logger.info("=== [MAKAN] PROSES SCAN DIMULAI ===");
       const request = DBConf.promise();
       const { rfid } = req.body;
       const uuid = uuidv4();
@@ -24,7 +25,7 @@ module.exports = {
       // const jamScan = "2026-03-12 21:30:00";
       // const jamOnly = "21:30:00";
 
-      console.log(`RFID: ${rfid}, Tanggal: ${tanggal}, Jam: ${jamOnly}`);
+      logger.info("Scan received", { rfid, tanggal, jam: jamOnly, uuid });
 
       // ================= SHIFT =================
       const shift1_in = { mulai: "20:00:00", selesai: "23:59:59" };
@@ -57,14 +58,15 @@ module.exports = {
         inRange(jamOnly, shift3_out);
 
       // ================= KARYAWAN =================
-      const [kRows] = await request.query(
-        `SELECT m_karyawan_id, nama 
+      const sqlKaryawan = `SELECT m_karyawan_id, nama 
                     FROM m_karyawan 
-                    WHERE rfid=? AND isactive=1`,
-        [rfid]
-      );
-
-      if (!kRows.length) return res.json({ message: "RFID tidak ditemukan" });
+                    WHERE rfid=? AND isactive=1`;
+      logger.sql(sqlKaryawan, [rfid]);
+      const [kRows] = await request.query(sqlKaryawan, [rfid]);
+      if (!kRows.length) {
+        logger.warn("RFID tidak ditemukan", { rfid });
+        return res.json({ message: "RFID tidak ditemukan" });
+      }
       const karyawan = kRows[0];
 
       // ================= BUSINESS DATE =================
@@ -105,6 +107,7 @@ module.exports = {
         queryParams = [karyawan.m_karyawan_id, shift, business_date, tanggalInsert];
       }
 
+      logger.sql(queryRows, queryParams);
       const [rows] = await request.query(queryRows, queryParams);
 
       // ================= UPDATE =================
@@ -112,6 +115,12 @@ module.exports = {
         const toNumber = (value) => Number(value ?? 0);
 
         let row = rows[0];
+
+        logger.info("Existing makan records found", {
+          count: rows.length,
+          shift,
+          business_date,
+        });
 
         if (isIn) {
           const pendingIn = rows.find((item) => toNumber(item.ismakan) !== 1);
@@ -122,31 +131,43 @@ module.exports = {
           const pendingOut = rows.find((item) => toNumber(item.actual_makan) !== 1);
           if (pendingOut) row = pendingOut;
         }
+        logger.info("Selected row for potential update", { row });
 
         // IN
         if (isIn && toNumber(row.ismakan) !== 1) {
-          await request.query(
-            `UPDATE m_makan_karyawan 
+          const sqlUpdateIn = `UPDATE m_makan_karyawan 
                             SET ismakan=1, waktu_pesan=? 
-                            WHERE m_makan_karyawan_id=?`,
-            [jamOnly, row.m_makan_karyawan_id]
-          );
+                            WHERE m_makan_karyawan_id=?`;
+          const paramsUpdateIn = [jamOnly, row.m_makan_karyawan_id];
+          logger.sql(sqlUpdateIn, paramsUpdateIn);
+          await request.query(sqlUpdateIn, paramsUpdateIn);
+
+          logger.info("Daftar makan recorded (IN)", {
+            nama: karyawan.nama,
+            m_makan_karyawan_id: row.m_makan_karyawan_id,
+          });
 
           return res.json({ message: "Daftar makan", nama: karyawan.nama });
         }
 
         // OUT
         if (isOut && toNumber(row.actual_makan) !== 1) {
-          await request.query(
-            `UPDATE m_makan_karyawan 
+          const sqlUpdateOut = `UPDATE m_makan_karyawan 
                             SET actual_makan=1, waktu_makan=? 
-                            WHERE m_makan_karyawan_id=?`,
-            [jamOnly, row.m_makan_karyawan_id]
-          );
+                            WHERE m_makan_karyawan_id=?`;
+          const paramsUpdateOut = [jamOnly, row.m_makan_karyawan_id];
+          logger.sql(sqlUpdateOut, paramsUpdateOut);
+          await request.query(sqlUpdateOut, paramsUpdateOut);
+
+          logger.info("Makan diambil recorded (OUT)", {
+            nama: karyawan.nama,
+            m_makan_karyawan_id: row.m_makan_karyawan_id,
+          });
 
           return res.json({ message: "Makan diambil", nama: karyawan.nama });
         }
 
+        logger.info("Sudah tercatat (no update needed)", { nama: karyawan.nama });
         return res.json({ message: "Sudah tercatat", nama: karyawan.nama });
       }
 
@@ -156,33 +177,56 @@ module.exports = {
       const waktuPesan = isIn ? jamOnly : null;
       const waktuMakan = isOut ? jamOnly : null;
 
-      await request.query(
-        `INSERT INTO m_makan_karyawan
+      const sqlInsert = `INSERT INTO m_makan_karyawan
                     (m_makan_karyawan_id, m_karyawan_id, tanggal, nama,
                         ismakan, actual_makan, shift, createdate,
                         waktu_pesan, waktu_makan, business_date)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-        [
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
+      const paramsInsert = [
+        uuid,
+        karyawan.m_karyawan_id,
+        tanggalInsert,
+        karyawan.nama,
+        ismakan,
+        actual,
+        shift,
+        jamScan,
+        waktuPesan,
+        waktuMakan,
+        business_date,
+      ];
+
+      logger.sql(sqlInsert, paramsInsert);
+
+      if (isOut && !ismakan) {
+        await request.query(sqlInsert, paramsInsert);
+        logger.warn("Attempt OUT without prior IN - denied", {
+          nama: karyawan.nama,
+          m_karyawan_id: karyawan.m_karyawan_id,
+          jam: jamOnly,
           uuid,
-          karyawan.m_karyawan_id,
-          tanggalInsert,
-          karyawan.nama,
+        });
+        return res.json({
+          message: "Anda Belum Daftar Makan.",
+          nama: karyawan.nama,
+          allowed: false,
+        });
+      } else {
+        await request.query(sqlInsert, paramsInsert);
+        logger.info("Inserted makan record", {
+          nama: karyawan.nama,
+          uuid,
           ismakan,
           actual,
           shift,
-          jamScan,
-          waktuPesan,
-          waktuMakan,
           business_date,
-        ]
-      );
-
-      return res.json({
-        message: actual ? "Makan diambil" : "Daftar makan",
-        nama: karyawan.nama,
-        shift,
-      });
-
+        });
+        return res.json({
+          message: actual ? "Makan diambil" : "Daftar makan",
+          nama: karyawan.nama,
+          shift,
+        });
+      }
     } catch (err) {
       console.log(err);
       res.status(500).json({ message: "Server error", err });
