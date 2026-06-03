@@ -178,7 +178,7 @@
       syncButton.disabled = true;
       syncButton.innerHTML = '<span class="spinner-small"></span>SYNCING...';
       try {
-        const res = await fetch("http://localhost:3000/sync", {
+        const res = await fetch("/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" }
         });
@@ -219,7 +219,7 @@
         message.classList.remove('fade');
         mainCard.classList.remove('red');
         try {
-          const res = await fetch("http://localhost:3000/makan", {
+          const res = await fetch("/makan", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ rfid }),
@@ -230,6 +230,7 @@
             namaKyw.classList.add('fade');
             const normalizedMessage = normalizeMessage(result.message);
             let statusText = normalizedMessage || "-";
+
             if (normalizedMessage === "Makan diambil") {
               statusText = "Silahkan Makan";
               statusMakan.classList.remove('red');
@@ -254,11 +255,20 @@
               statusMakan.classList.remove('red');
               mainCard.classList.remove('red');
             }
+
+            // Tampilkan shift jika ada
+            if (result.shift) {
+              statusText += " (Shift " + result.shift + ")";
+            }
+
             statusMakan.textContent = statusText;
             statusMakan.classList.add('fade');
           } else {
-            namaKyw.textContent = result.message || "Tidak ditemukan";
+            // Error response tanpa nama — tampilkan pesan asli dari backend
+            const errorMsg = result.message || "Tidak ditemukan";
+            namaKyw.textContent = errorMsg;
             namaKyw.classList.add('fade');
+            message.textContent = "";
             statusMakan.textContent = "-";
             statusMakan.classList.add('red');
             statusMakan.classList.add('fade');
@@ -266,6 +276,7 @@
             setTimeout(() => {
               namaKyw.textContent = "NAMA";
               statusMakan.textContent = "-";
+              message.textContent = "";
               statusMakan.classList.remove('red');
               mainCard.classList.remove('red');
               namaKyw.classList.remove('fade');

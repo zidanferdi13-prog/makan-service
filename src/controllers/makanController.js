@@ -229,7 +229,7 @@ module.exports = {
       }
     } catch (err) {
       console.log(err);
-      res.status(500).json({ message: "Server error", err });
+      res.status(500).json({ message: "Server error" });
     }
   },
 
@@ -254,8 +254,9 @@ module.exports = {
       return res.send(respone("200", mkn));
     } catch (error) {
       console.log("error", error);
+      console.log("findMakan error:", error);
       res.status(500).json({
-        message: error,
+        message: "Gagal mengambil data",
       });
     }
   },
